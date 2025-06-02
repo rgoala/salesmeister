@@ -10,7 +10,11 @@ const breadcrumbs = [
 
 export default function CreateClient() {
     const [countries, setCountries] = useState<any[]>([]);
-    const [contacts, setContacts] = useState([{ name: '', email: '', phone: '' }]);
+    const [states, setStates] = useState<any[]>([]);
+    const [cities, setCities] = useState<any[]>([]);
+    const [contacts, setContacts] = useState([{ salutation: '', first_name: '', last_name: '', email: '', phone: '', mobile: '', address1: '', 
+        position: '', department: '',
+    }]);
 
     const { data, setData, processing, post, reset, errors } = useForm({
         organization_name: '',
@@ -24,6 +28,10 @@ export default function CreateClient() {
         country_id: '',
         zip: '',
         website: '',
+        industry: '',
+        status: 'active',
+        tax_id: '',
+        currency: '',
         contacts: contacts,
     });
 
@@ -34,6 +42,40 @@ export default function CreateClient() {
             })
             .catch(() => setCountries([]));
     }, []);
+
+    // Fetch states when country changes
+    useEffect(() => {
+        if (data.country_id) {
+            axios.get(`/states/by-country/${data.country_id}`)
+                .then((response) => {
+                    setStates(response.data || []);
+                })
+                .catch(() => setStates([]));
+            setData('state_id', '');
+            setData('city_id', '');
+            setCities([]);
+        } else {
+            setStates([]);
+            setCities([]);
+            setData('state_id', '');
+            setData('city_id', '');
+        }
+    }, [data.country_id]);
+
+    // Fetch cities when state changes
+    useEffect(() => {
+        if (data.state_id) {
+            axios.get(`/cities/by-state/${data.state_id}`)
+                .then((response) => {
+                    setCities(response.data || []);
+                })
+                .catch(() => setCities([]));
+            setData('city_id', '');
+        } else {
+            setCities([]);
+            setData('city_id', '');
+        }
+    }, [data.state_id]);
 
     // Keep contacts in sync with form data
     useEffect(() => {
@@ -47,7 +89,8 @@ export default function CreateClient() {
     };
 
     const handleAddContact = () => {
-        setContacts([...contacts, { name: '', email: '', phone: '' }]);
+        setContacts([...contacts, { salutation: '', first_name: '', last_name: '', email: '', phone: '', mobile: '', address1: '', 
+        position: '', department: '' }]);
     };
 
     const handleRemoveContact = (idx: number) => {
@@ -63,7 +106,8 @@ export default function CreateClient() {
         post('/clients/store', {
             onSuccess: () => {
                 reset();
-                setContacts([{ name: '', email: '', phone: '' }]);
+                setContacts([{ salutation: '', first_name: '', last_name: '', email: '', phone: '', mobile: '', address1: '', 
+        position: '', department: '' }]);
             }
         });
     };
@@ -71,12 +115,13 @@ export default function CreateClient() {
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Add Client" />
-            <div className="flex h-full flex-1 flex-col gap-4 rounded-xl p-4">
+            <div className="flex h-full flex-1 flex-col gap-4 rounded-xl p-2">
                 <div className="border-sidebar-border/70 dark:border-sidebar-border relative min-h-[100vh] flex-1 overflow-hidden rounded-xl border md:min-h-min">
                     <form onSubmit={submit} className="justify-left relative flex h-full w-full flex-col items-center p-4">
-                        <div className="mt-4 w-full max-w-2xl">
+                        <div className="mt-4 w-full">
                             <h2 className="text-xl font-bold mb-4">Add New Client</h2>
-                            <div className="mb-4">
+                            <div className="mb-4 flex gap-4">
+                                <div className="flex-1">
                                 <label className="block text-xs font-bold text-gray-700 mb-1">Organization Name</label>
                                 <input
                                     name="organization_name"
@@ -86,8 +131,7 @@ export default function CreateClient() {
                                     required
                                 />
                                 {errors.organization_name && <p className="text-xs text-red-500 italic">{errors.organization_name}</p>}
-                            </div>
-                            <div className="mb-4 flex gap-4">
+                                </div>
                                 <div className="flex-1">
                                     <label className="block text-xs font-bold text-gray-700 mb-1">Email</label>
                                     <input
@@ -99,6 +143,18 @@ export default function CreateClient() {
                                     />
                                     {errors.email && <p className="text-xs text-red-500 italic">{errors.email}</p>}
                                 </div>
+                                <div className="flex-1">
+                                    <label className="block text-xs font-bold text-gray-700 mb-1">Website</label>
+                                    <input
+                                        name="website"
+                                        value={data.website}
+                                        onChange={handleChange}
+                                        className="w-full rounded border px-2 py-1 text-xs"
+                                    />
+                                    {errors.website && <p className="text-xs text-red-500 italic">{errors.website}</p>}
+                                </div>
+                            </div>
+                            <div className="mb-4 flex gap-4">
                                 <div className="flex-1">
                                     <label className="block text-xs font-bold text-gray-700 mb-1">Phone</label>
                                     <input
@@ -118,6 +174,16 @@ export default function CreateClient() {
                                         className="w-full rounded border px-2 py-1 text-xs"
                                     />
                                     {errors.fax && <p className="text-xs text-red-500 italic">{errors.fax}</p>}
+                                </div>
+                                <div className="flex-1">
+                                    <label className="block text-xs font-bold text-gray-700 mb-1">Postal Code</label>
+                                    <input
+                                        name="zip"
+                                        value={data.zip}
+                                        onChange={handleChange}
+                                        className="w-full rounded border px-2 py-1 text-xs"
+                                    />
+                                    {errors.zip && <p className="text-xs text-red-500 italic">{errors.zip}</p>}
                                 </div>
                             </div>
                             <div className="mb-4 flex gap-4">
@@ -143,26 +209,7 @@ export default function CreateClient() {
                                 </div>
                             </div>
                             <div className="mb-4 flex gap-4">
-                                <div className="flex-1">
-                                    <label className="block text-xs font-bold text-gray-700 mb-1">City</label>
-                                    <input
-                                        name="city_id"
-                                        value={data.city_id}
-                                        onChange={handleChange}
-                                        className="w-full rounded border px-2 py-1 text-xs"
-                                    />
-                                    {errors.city_id && <p className="text-xs text-red-500 italic">{errors.city_id}</p>}
-                                </div>
-                                <div className="flex-1">
-                                    <label className="block text-xs font-bold text-gray-700 mb-1">State</label>
-                                    <input
-                                        name="state_id"
-                                        value={data.state_id}
-                                        onChange={handleChange}
-                                        className="w-full rounded border px-2 py-1 text-xs"
-                                    />
-                                    {errors.state_id && <p className="text-xs text-red-500 italic">{errors.state_id}</p>}
-                                </div>
+                            {/* Country */}
                                 <div className="flex-1">
                                     <label className="block text-xs font-bold text-gray-700 mb-1">Country</label>
                                     <select
@@ -180,27 +227,103 @@ export default function CreateClient() {
                                     </select>
                                     {errors.country_id && <p className="text-xs text-red-500 italic">{errors.country_id}</p>}
                                 </div>
+                                {/* State */}
+                                <div className="flex-1">
+                                    <label className="block text-xs font-bold text-gray-700 mb-1">State</label>
+                                    <select
+                                        name="state_id"
+                                        value={data.state_id}
+                                        onChange={handleChange}
+                                        className="w-full rounded border px-2 py-1 text-xs"
+                                        disabled={!states.length}
+                                    >
+                                        <option value="">Select State</option>
+                                        {states.map((state: any) => (
+                                            <option key={state.id} value={state.id}>
+                                                {state.name}
+                                            </option>
+                                        ))}
+                                    </select>
+                                    {errors.state_id && <p className="text-xs text-red-500 italic">{errors.state_id}</p>}
+                                </div>
+                                {/* City */}
+                                <div className="flex-1">
+                                    <label className="block text-xs font-bold text-gray-700 mb-1">City</label>
+                                    <select
+                                        name="city_id"
+                                        value={data.city_id}
+                                        onChange={handleChange}
+                                        className="w-full rounded border px-2 py-1 text-xs"
+                                        disabled={!cities.length}
+                                    >
+                                        <option value="">Select City</option>
+                                        {cities.map((city: any) => (
+                                            <option key={city.id} value={city.id}>
+                                                {city.name}
+                                            </option>
+                                        ))}
+                                    </select>
+                                    {errors.city_id && <p className="text-xs text-red-500 italic">{errors.city_id}</p>}
+                                </div>
                             </div>
                             <div className="mb-4 flex gap-4">
                                 <div className="flex-1">
-                                    <label className="block text-xs font-bold text-gray-700 mb-1">Postal Code</label>
-                                    <input
-                                        name="postal_code"
-                                        value={data.zip}
+                                    <select
+                                        name="industry"
+                                        value={data.industry}
                                         onChange={handleChange}
-                                        className="w-full rounded border px-2 py-1 text-xs"
-                                    />
-                                    {errors.zip && <p className="text-xs text-red-500 italic">{errors.zip}</p>}
+                                        className="rounded border px-2 py-1 text-xs"
+                                        required
+                                    >
+                                        <option value="">Industry</option>
+                                    {['Education', 'Research', 'Pharmaceutical', 'Food Safety', 'Laboratory'].map(industry => (
+                                        <option key={industry} value={industry}>
+                                        {industry}
+                                        </option>
+                                    ))}
+                                    </select>
+                                    {errors.industry && <p className="text-xs text-red-500 italic">{errors.industry}</p>}
                                 </div>
                                 <div className="flex-1">
-                                    <label className="block text-xs font-bold text-gray-700 mb-1">Website</label>
-                                    <input
-                                        name="website"
-                                        value={data.website}
+                                    <select
+                                        name="status"
+                                        value={data.status}
                                         onChange={handleChange}
-                                        className="w-full rounded border px-2 py-1 text-xs"
+                                        className="rounded border px-2 py-1 text-xs"
+                                        required
+                                    >
+                                        <option key="1" selected value='active'>Active</option>
+                                        <option key="0" value='inactive'>Inactive</option>
+                                    </select>
+                                    {errors.status && <p className="text-xs text-red-500 italic">{errors.status}</p>}
+                                </div>
+                                <div className="flex-1">
+                                    <input
+                                        type='text'
+                                        name="tax_id"
+                                        value={data.tax_id}
+                                        onChange={handleChange}
+                                        className="rounded border px-2 py-1 text-xs"
+                                        required
                                     />
-                                    {errors.website && <p className="text-xs text-red-500 italic">{errors.website}</p>}
+                                    {errors.tax_id && <p className="text-xs text-red-500 italic">{errors.tax_id}</p>}
+                                </div>
+                                <div className="flex-1">
+                                    <select
+                                        name="currency"
+                                        value={data.currency}
+                                        onChange={handleChange}
+                                        className="rounded border px-2 py-1 text-xs"
+                                        required
+                                    >
+                                        <option>Select Currency</option>
+                                        {['AED','USD', 'EUR', 'GBP', 'JPY'].map(currency => (
+                                            <option key={currency} value={currency}>
+                                                {currency}
+                                            </option>
+                                        ))}
+                                    </select>
+                                    {errors.currency && <p className="text-xs text-red-500 italic">{errors.currency}</p>}
                                 </div>
                             </div>
                             {/* --- Contacts Section --- */}
@@ -211,16 +334,48 @@ export default function CreateClient() {
                                 {contacts.map((contact, idx) => (
                                     <div key={idx} className="flex flex-row gap-2 mb-2 items-end">
                                         <div className="flex-1">
+                                            <select
+                                                name="salutation"
+                                                value={contact.salutation}
+                                                onChange={e => handleContactChange(idx, 'salutation', e.target.value)}
+                                                className="rounded border px-2 py-1 text-xs"
+                                                required
+                                            >
+                                                <option value="">Salutation</option>
+                                        {['Mr.', 'Ms.', 'Mrs.', 'Dr.', 'Prof.'].map(salutation => (
+                                            <option key={salutation} value={salutation}>
+                                                {salutation}
+                                            </option>
+                                        ))}
+                                        </select>
+                                            {errors[`contacts.${idx}.salutation`] && (
+                                                <p className="text-xs text-red-500 italic">{errors[`contacts.${idx}.salutation`]}</p>
+                                            )}
+                                        </div>
+                                        <div className="flex-1">
                                             <input
                                                 type="text"
-                                                placeholder="Contact Name"
-                                                value={contact.name}
-                                                onChange={e => handleContactChange(idx, 'name', e.target.value)}
+                                                placeholder="Contact First Name"
+                                                value={contact.first_name}
+                                                onChange={e => handleContactChange(idx, 'first_name', e.target.value)}
                                                 className="w-full rounded border px-2 py-1 text-xs"
                                                 required
                                             />
-                                            {errors[`contacts.${idx}.name`] && (
-                                                <p className="text-xs text-red-500 italic">{errors[`contacts.${idx}.name`]}</p>
+                                            {errors[`contacts.${idx}.first_name`] && (
+                                                <p className="text-xs text-red-500 italic">{errors[`contacts.${idx}.first_name`]}</p>
+                                            )}
+                                        </div>
+                                        <div className="flex-1">
+                                            <input
+                                                type="text"
+                                                placeholder="Last Name"
+                                                value={contact.last_name}
+                                                onChange={e => handleContactChange(idx, 'last_name', e.target.value)}
+                                                className="w-full rounded border px-2 py-1 text-xs"
+                                                required
+                                            />
+                                            {errors[`contacts.${idx}.last_name`] && (
+                                                <p className="text-xs text-red-500 italic">{errors[`contacts.${idx}.last_name`]}</p>
                                             )}
                                         </div>
                                         <div className="flex-1">
@@ -245,6 +400,54 @@ export default function CreateClient() {
                                             />
                                             {errors[`contacts.${idx}.phone`] && (
                                                 <p className="text-xs text-red-500 italic">{errors[`contacts.${idx}.phone`]}</p>
+                                            )}
+                                        </div>
+                                        <div className="flex-1">
+                                            <input
+                                                type="text"
+                                                placeholder="Mobile"
+                                                value={contact.mobile}
+                                                onChange={e => handleContactChange(idx, 'mobile', e.target.value)}
+                                                className="w-full rounded border px-2 py-1 text-xs"
+                                            />
+                                            {errors[`contacts.${idx}.mobile`] && (
+                                                <p className="text-xs text-red-500 italic">{errors[`contacts.${idx}.mobile`]}</p>
+                                            )}
+                                        </div>
+                                        <div className="flex-1">
+                                            <input
+                                                type="text"
+                                                placeholder="Address 1"
+                                                value={contact.address1}
+                                                onChange={e => handleContactChange(idx, 'address1', e.target.value)}
+                                                className="w-full rounded border px-2 py-1 text-xs"
+                                            />
+                                            {errors[`contacts.${idx}.address1`] && (
+                                                <p className="text-xs text-red-500 italic">{errors[`contacts.${idx}.address1`]}</p>
+                                            )}
+                                        </div>
+                                        <div className="flex-1">
+                                            <input
+                                                type="text"
+                                                placeholder="Designation"
+                                                value={contact.position}
+                                                onChange={e => handleContactChange(idx, 'position', e.target.value)}
+                                                className="w-full rounded border px-2 py-1 text-xs"
+                                            />
+                                            {errors[`contacts.${idx}.position`] && (
+                                                <p className="text-xs text-red-500 italic">{errors[`contacts.${idx}.position`]}</p>
+                                            )}
+                                        </div>
+                                        <div className="flex-1">
+                                            <input
+                                                type="text"
+                                                placeholder="Department"
+                                                value={contact.department}
+                                                onChange={e => handleContactChange(idx, 'department', e.target.value)}
+                                                className="w-full rounded border px-2 py-1 text-xs"
+                                            />
+                                            {errors[`contacts.${idx}.department`] && (
+                                                <p className="text-xs text-red-500 italic">{errors[`contacts.${idx}.department`]}</p>
                                             )}
                                         </div>
                                         <button

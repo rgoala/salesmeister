@@ -20,13 +20,7 @@ return new class extends Migration
             $table->string('email')->unique();
             $table->string('phone')->unique();
             $table->string('mobile')->unique();
-            $table->string('fax')->unique();
             $table->string('address1');
-            $table->string('address2')->nullable();
-            $table->string('city');
-            $table->string('zip')->nullable();
-            $table->string('state');
-            $table->string('country');
             $table->string('position')->nullable();
             $table->string('department')->nullable();
             $table->timestamps();

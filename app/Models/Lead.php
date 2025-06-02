@@ -27,15 +27,10 @@ class Lead extends Model
         'updated_at'
     ];
 
-    public function client()
-    {
-        return $this->belongsTo(Client::class);
-    }
-
-    public function leadType()
-    {
-        return $this->belongsTo(LeadType::class);
-    }
+    public function client() { return $this->belongsTo(\App\Models\Client::class); }
+    public function assignedToUser() { return $this->belongsTo(\App\Models\User::class, 'assigned_to'); }
+    public function leadType() { return $this->belongsTo(\App\Models\LeadType::class, 'lead_type_id'); }
+    public function workflows() { return $this->hasMany(\App\Models\Workflow::class); }
 
     public function city()
     {
@@ -55,11 +50,6 @@ class Lead extends Model
     public function comments()
     {
         return $this->hasMany(Comment::class);
-    }
-    
-    public function assignedUser()
-    {
-        return $this->belongsTo(User::class, 'assigned_to');
     }
     
     public function source()

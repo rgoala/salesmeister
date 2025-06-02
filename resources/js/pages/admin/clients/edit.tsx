@@ -9,16 +9,25 @@ const breadcrumbs = [
 ];
 
 export default function EditClient({ client, countries: initialCountries }: { client: any, countries: any[] }) {
-    const [countries, setCountries] = useState<any[]>(initialCountries || []);
+    const [countries, setCountries] = useState<any[]>([]);
+    const [states, setStates] = useState<any[]>([]);
+    const [cities, setCities] = useState<any[]>([]);
     const [contacts, setContacts] = useState(
         client.contacts && client.contacts.length > 0
             ? client.contacts.map((c: any) => ({
                 id: c.id,
-                name: c.salutation + ' ' + c.first_name + ' ' + c.last_name || '',
+                salutation: c.salutation || '',
+                first_name: c.first_name || '', 
+                last_name: c.last_name || '',
                 email: c.email || '',
-                phone: c.phone || ''
+                phone: c.phone || '',
+                mobile: c.mobile || '',
+                address1: c.address1 || '',
+                position: c.position || '',
+                department: c.department || '',
             }))
-            : [{ name: '', email: '', phone: '' }]
+            : [{ salutation: '', first_name: '', last_name: '', email: '', phone: '', mobile: '', address1: '', 
+        position: '', department: '' }]
     );
 
     const { data, setData, processing, put, reset, errors } = useForm({
@@ -28,23 +37,46 @@ export default function EditClient({ client, countries: initialCountries }: { cl
         fax: client.fax || '',
         address1: client.address1 || '',
         address2: client.address2 || '',
-        city: client.city || '',
-        state: client.state || '',
-        country: client.country || '',
+        city_id: client.city_id || '',
+        state_id: client.state_id || '',
+        country_id: client.country_id || '',
         zip: client.zip || '',
         website: client.website || '',
+        industry: client.industry || '',
+        status: client.status || 'active',
+        tax_id: client.tax_id || '',
+        currency: client.currency || '',
         contacts: contacts,
     });
 
     useEffect(() => {
-        if (!initialCountries || initialCountries.length === 0) {
-            axios.get('/countries/getcountries')
-                .then((response) => {
-                    setCountries(response.data || []);
-                })
-                .catch(() => setCountries([]));
-        }
+        axios.get('/countries/getcountries')
+            .then((response) => {
+                setCountries(response.data || []);
+            })
+            .catch(() => setCountries([]));
     }, []);
+
+    // Fetch states when country changes
+    useEffect(() => {
+        axios.get(`/states/by-country/${data.country_id}`)
+                .then((response) => {
+                    setStates(response.data || []);
+                })
+                .catch(() => setStates([]));
+            setData('state_id', data.state_id);
+            setCities([]);
+    }, [data.country_id]);
+
+    // Fetch cities when state changes
+    useEffect(() => {
+            axios.get(`/cities/by-state/${data.state_id}`)
+                .then((response) => {
+                    setCities(response.data || []);
+                })
+                .catch(() => setCities([]));
+            setData('city_id', data.city_id);
+    }, [data.state_id]);
 
     // Keep contacts in sync with form data
     useEffect(() => {
@@ -58,7 +90,8 @@ export default function EditClient({ client, countries: initialCountries }: { cl
     };
 
     const handleAddContact = () => {
-        setContacts([...contacts, { name: '', email: '', phone: '' }]);
+        setContacts([...contacts, { salutation: '', first_name: '', last_name: '', email: '', phone: '', mobile: '', address1: '', 
+        position: '', department: '' }]);
     };
 
     const handleRemoveContact = (idx: number) => {
@@ -74,7 +107,8 @@ export default function EditClient({ client, countries: initialCountries }: { cl
         put(`/admin/clients/${client.id}/update`, {
             onSuccess: () => {
                 reset();
-                setContacts([{ name: '', email: '', phone: '' }]);
+                setContacts([{ salutation: '', first_name: '', last_name: '', email: '', phone: '', mobile: '', address1: '', 
+        position: '', department: '' }]);
             }
         });
     };
@@ -156,29 +190,46 @@ export default function EditClient({ client, countries: initialCountries }: { cl
                             <div className="mb-4 flex gap-4">
                                 <div className="flex-1">
                                     <label className="block text-xs font-bold text-gray-700 mb-1">City</label>
-                                    <input
+                                    <select
                                         name="city_id"
-                                        value={data.city}
+                                        value={data.city_id}
                                         onChange={handleChange}
                                         className="w-full rounded border px-2 py-1 text-xs"
-                                    />
-                                    {errors.city && <p className="text-xs text-red-500 italic">{errors.city}</p>}
+                                        disabled={!cities.length}
+                                    >
+                                        <option value="">Select City</option>
+                                        {cities.map((city: any) => (
+                                            <option key={city.id} value={city.id}>
+                                                {city.name}
+                                            </option>
+                                        ))}
+                                    </select>
+                                    {errors.city_id && <p className="text-xs text-red-500 italic">{errors.city_id}</p>}
                                 </div>
+                                {/* State */}
                                 <div className="flex-1">
                                     <label className="block text-xs font-bold text-gray-700 mb-1">State</label>
-                                    <input
+                                    <select
                                         name="state_id"
-                                        value={data.state}
+                                        value={data.state_id}
                                         onChange={handleChange}
                                         className="w-full rounded border px-2 py-1 text-xs"
-                                    />
-                                    {errors.state && <p className="text-xs text-red-500 italic">{errors.state}</p>}
+                                        disabled={!states.length}
+                                    >
+                                        <option value="">Select State</option>
+                                        {states.map((state: any) => (
+                                            <option key={state.id} value={state.id}>
+                                                {state.name}
+                                            </option>
+                                        ))}
+                                    </select>
+                                    {errors.state_id && <p className="text-xs text-red-500 italic">{errors.state_id}</p>}
                                 </div>
                                 <div className="flex-1">
                                     <label className="block text-xs font-bold text-gray-700 mb-1">Country</label>
                                     <select
                                         name="country_id"
-                                        value={data.country}
+                                        value={data.country_id}
                                         onChange={handleChange}
                                         className="w-full rounded border px-2 py-1 text-xs"
                                     >
@@ -189,7 +240,7 @@ export default function EditClient({ client, countries: initialCountries }: { cl
                                             </option>
                                         ))}
                                     </select>
-                                    {errors.country && <p className="text-xs text-red-500 italic">{errors.country}</p>}
+                                    {errors.country_id && <p className="text-xs text-red-500 italic">{errors.country_id}</p>}
                                 </div>
                             </div>
                             <div className="mb-4 flex gap-4">
@@ -224,14 +275,40 @@ export default function EditClient({ client, countries: initialCountries }: { cl
                                         <div className="flex-1">
                                             <input
                                                 type="text"
-                                                placeholder="Contact Name"
-                                                value={contact.name}
-                                                onChange={e => handleContactChange(idx, 'name', e.target.value)}
+                                                placeholder="Salutation"
+                                                value={contact.salutation}
+                                                onChange={e => handleContactChange(idx, 'salutation', e.target.value)}
                                                 className="w-full rounded border px-2 py-1 text-xs"
                                                 required
                                             />
-                                            {errors[`contacts.${idx}.name`] && (
-                                                <p className="text-xs text-red-500 italic">{errors[`contacts.${idx}.name`]}</p>
+                                            {errors[`contacts.${idx}.salutation`] && (
+                                                <p className="text-xs text-red-500 italic">{errors[`contacts.${idx}.salutation`]}</p>
+                                            )}
+                                        </div>
+                                        <div className="flex-1">
+                                            <input
+                                                type="text"
+                                                placeholder="First Name"
+                                                value={contact.first_name}
+                                                onChange={e => handleContactChange(idx, 'first_name', e.target.value)}
+                                                className="w-full rounded border px-2 py-1 text-xs"
+                                                required
+                                            />
+                                            {errors[`contacts.${idx}.first_name`] && (
+                                                <p className="text-xs text-red-500 italic">{errors[`contacts.${idx}.first_name`]}</p>
+                                            )}
+                                        </div>
+                                        <div className="flex-1">
+                                            <input
+                                                type="text"
+                                                placeholder="Last Name"
+                                                value={contact.last_name}
+                                                onChange={e => handleContactChange(idx, 'last_name', e.target.value)}
+                                                className="w-full rounded border px-2 py-1 text-xs"
+                                                required
+                                            />
+                                            {errors[`contacts.${idx}.last_name`] && (
+                                                <p className="text-xs text-red-500 italic">{errors[`contacts.${idx}.last_name`]}</p>
                                             )}
                                         </div>
                                         <div className="flex-1">

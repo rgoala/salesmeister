@@ -7,37 +7,23 @@ use Illuminate\Database\Eloquent\Model;
 class Contact extends Model
 {
     protected $fillable = [
+        'client_id',
         'salutation',
         'first_name',
         'last_name',
         'email',
         'phone',
         'mobile',
-        'address',
-        'city_id',
-        'state_id',
-        'country_id',
-        'zip',
-        'notes',
-        'client_id',
+        'address1',
+        'position',
+        'department',
     ];
 
-    
-
-    public function city()
+    public function client()
     {
-        return $this->belongsTo(City::class);
+        return $this->belongsTo(Client::class);
     }
 
-    public function state()
-    {
-        return $this->belongsTo(State::class);
-    }
-
-    public function country()
-    {
-        return $this->belongsTo(Country::class);
-    }
     public function leads()
     {
         return $this->hasMany(Lead::class);

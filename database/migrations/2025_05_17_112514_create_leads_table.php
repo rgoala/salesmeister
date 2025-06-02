@@ -19,7 +19,7 @@ return new class extends Migration
             $table->foreignId('lead_type_id')->constrained('lead_types')->onDelete('cascade');
             $table->foreignId('client_id')->constrained('clients')->onDelete('cascade');
             $table->foreignId('contact_id')->nullable()->constrained('contacts')->onDelete('cascade');
-            $table->enum('status', ['new', 'in_progress', 'completed'])->default('new');
+            $table->enum('status', ['New', 'In_progress', 'Completed'])->default('New');
             $table->date('expected_close_date')->nullable();
             $table->date('actual_close_date')->nullable();
             $table->foreignId('created_by')->constrained('users')->onDelete('cascade');

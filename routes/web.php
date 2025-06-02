@@ -11,6 +11,7 @@ use \App\Models\User;
 use \App\Models\LeadType;
 use \App\Models\Lead;
 use \App\Models\Workflow;
+use \App\Models\Step;
 
 Route::get('/', function () {
     return Inertia::render('welcome');
@@ -28,13 +29,246 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
 Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('leads', function () {
-        return Inertia::render('leads/index');
+        $user = auth()->user();
+
+        $query = \App\Models\Lead::with([
+            'client:id,organization_name',
+            'assignedToUser:id,name',
+            'leadType:id,title',
+            'workflows.task:id,title',
+            'workflows.step:id,description'
+        ]);
+
+        // If not superadmin, only show leads assigned to the user
+        if ($user->role !== 'superadmin') {
+            $query->where('assigned_to', $user->id);
+        }
+
+        $leads =$query->orderBy('updated_at', 'desc')
+            ->get()
+            ->map(function ($lead) {
+                return [
+                    'id' => $lead->id,
+                    'name' => $lead->name,
+                    'client_name' => $lead->client ? $lead->client->organization_name : null,
+                    'status' => $lead->status,
+                    'expected_close_date' => $lead->expected_close_date,
+                    'assigned_to' => $lead->assignedToUser ? $lead->assignedToUser->name : null,
+                    'lead_type' => $lead->leadType ? ['title' => $lead->leadType->name] : null,
+                    'workflows' => $lead->workflows->map(function ($wf) {
+                        return [
+                            'id' => $wf->id,
+                            'task_title' => $wf->task ? $wf->task->title : '',
+                            'step_description' => $wf->step ? $wf->step->description : '',
+                            'status' => $wf->status,
+                        ];
+                    }),
+                ];
+            });
+
+        return Inertia::render('leads/index', [
+            'leads' => $leads
+        ]);
     })->name('leads.index');
 });
 
 Route::middleware(['auth', 'verified'])->group(function () {
+    Route::get('leads/status-summary', function () {
+        // Group leads by status and count them
+        $statusCounts = \App\Models\Lead::selectRaw('status, COUNT(*) as count')
+            ->groupBy('status')
+            ->pluck('count', 'status');
+
+        // Ensure all statuses are present (Open, In-progress, Closed)
+        $allStatuses = ['New', 'in-progress', 'Closed'];
+        $result = [];
+        foreach ($allStatuses as $status) {
+            $result[$status] = $statusCounts[$status] ?? 0;
+        }
+
+        return response()->json($result);
+    });
+});
+
+Route::middleware(['auth', 'verified'])->group(function () {
+    Route::get('leads/by-task-category', function () {
+        // Get all tasks ordered by task_order
+        $tasks = \App\Models\Task::orderBy('task_order')->get();
+
+        // Get all workflows grouped by lead
+        $workflowsByLead = \App\Models\Workflow::with('task')
+            ->get()
+            ->groupBy('lead_id');
+
+        $result = [];
+        $countedLeads = [];
+
+        foreach ($tasks as $task) {
+            $count = 0;
+            foreach ($workflowsByLead as $leadId => $workflows) {
+                if (in_array($leadId, $countedLeads)) {
+                    continue; // Already counted for a previous task
+                }
+                // Order workflows by task order
+                $ordered = $workflows->sortBy(function ($wf) use ($tasks) {
+                    return $tasks->search(function ($t) use ($wf) {
+                        return $t->id == $wf->task_id;
+                    });
+                })->values();
+
+                // Find the first workflow that is not completed
+                foreach ($ordered as $wf) {
+                    if (strtolower($wf->status) !== 'completed') {
+                        if ($wf->task_id == $task->id) {
+                            $count++;
+                            $countedLeads[] = $leadId;
+                        }
+                        break;
+                    }
+                }
+                // If all are completed, count the last task as current
+                if ($ordered->every(fn($wf) => strtolower($wf->status) === 'completed')) {
+                    if ($ordered->last()->task_id == $task->id) {
+                        $count++;
+                        $countedLeads[] = $leadId;
+                    }
+                }
+            }
+            $result[$task->title] = $count;
+        }
+
+        return response()->json($result);
+    });
+});
+
+Route::middleware(['auth', 'verified'])->group(function () {
+    Route::get('/workflows/{workflow}/edit', function (Workflow $workflow) {
+        $lead = Lead::find($workflow->lead_id);
+        $users = User::select('id', 'name')->get();
+        return Inertia::render('workflows/edit', [
+            'workflow' => [
+                'id' => $workflow->id,
+                'task_title' => $workflow->task ? $workflow->task->title : '',
+                'step_description' => $workflow->step ? $workflow->step->description : '',
+                'status' => $workflow->status,
+                'assigned_to' => $workflow->assigned_to,
+                'data' => $workflow->data ?? '',
+            ],
+            'lead' => [
+                'id' => $lead->id,
+                'name' => $lead->name,
+            ],
+            'users' => $users,
+        ]);
+    })->name('workflows.edit');
+});
+
+Route::middleware(['auth', 'verified'])->group(function () {
+
+    // Get next step info for skip modal
+    Route::get('/workflows/{workflow}/next-task-info', function (Workflow $workflow) {
+        // Get all steps for the current task ordered by id (or use step_order if available)
+        $steps = Step::where('task_id', $workflow->task_id)->orderBy('id')->get();
+        $currentStepIndex = $steps->search(fn($s) => $s->id == $workflow->step_id);
+
+        // Next step is the next in order, or null if last
+        $nextStep = $steps->get($currentStepIndex + 1);
+        $nextStepDescription = $nextStep ? $nextStep->description : null;
+
+        // Assignable users (example: all users, or filter as needed)
+        $assignToOptions = User::select('id', 'name')->get();
+
+        return response()->json([
+            'nextTaskTitle' => $nextStepDescription,
+            'assignToOptions' => $assignToOptions,
+        ]);
+    });
+
+    // Handle skip action for a step
+    Route::post('/workflows/{workflow}/skip', function (Request $request, Workflow $workflow) {
+        $validated = $request->validate([
+            'comment' => 'required|string|max:1000',
+            'assign_to' => 'nullable|exists:users,id',
+        ]);
+
+        // Mark current workflow step as skipped
+        $workflow->status = 'skipped';
+        $workflow->comment = $validated['comment'];
+        $workflow->save();
+
+        // Move to next step if exists
+        $steps = Step::where('task_id', $workflow->task_id)->orderBy('id')->get();
+        $currentStepIndex = $steps->search(fn($s) => $s->id == $workflow->step_id);
+        $nextStep = $steps->get($currentStepIndex + 1);
+
+        if ($nextStep) {
+            // Find or create the next workflow step for this lead, task, and step
+            $nextWorkflow = Workflow::firstOrCreate(
+                [
+                    'lead_id' => $workflow->lead_id,
+                    'task_id' => $workflow->task_id,
+                    'step_id' => $nextStep->id,
+                ],
+                [
+                    'status' => 'pending',
+                ]
+            );
+            // Assign to selected user if provided
+            if (!empty($validated['assign_to'])) {
+                $nextWorkflow->assigned_to = $validated['assign_to'];
+                $nextWorkflow->save();
+            }
+        }
+
+        return response()->json(['success' => true]);
+    });
+});
+
+// Route::middleware(['auth', 'verified'])->group(function () {
+//     Route::get('leads/by-task-category', function () {
+//         // Join leads, workflows, tasks and group by task title (category)
+//         $taskCounts = \App\Models\Workflow::selectRaw('tasks.title as task_category, COUNT(DISTINCT lead_id) as leads_count')
+//             ->join('tasks', 'workflows.task_id', '=', 'tasks.id')
+//             ->groupBy('tasks.title')
+//             ->pluck('leads_count', 'task_category');
+
+//         return response()->json($taskCounts);
+//     });
+// });
+
+
+
+// Route::middleware(['auth', 'verified'])->group(function () {
+//     Route::get('clients', function () {
+//         return Inertia::render('admin/clients/index',['clients' => Client::all()]);
+//     })->name('clients.index');
+// });
+
+Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('clients', function () {
-        return Inertia::render('admin/clients/index',['clients' => Client::all()]);
+        $clients = Client::with(['contacts:id,client_id,first_name,last_name'])
+            ->withCount('leads')
+            ->get()
+            ->map(function ($client) {
+                return [
+                    'id' => $client->id,
+                    'organization_name' => $client->organization_name,
+                    'email' => $client->email,
+                    'phone' => $client->phone,
+                    'contacts' => $client->contacts->map(function ($contact) {
+                        return [
+                            'id' => $contact->id,
+                            'first_name' => $contact->first_name,
+                            'last_name' => $contact->last_name,
+                        ];
+                    }),
+                    'leads_count' => $client->leads_count,
+                ];
+            });
+
+        return Inertia::render('admin/clients/index', [
+            'clients' => $clients
+        ]);
     })->name('clients.index');
 });
 
@@ -48,6 +282,14 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('countries/getcountries', function () {
         return json_encode($countries = Country::all());
     })->name('countries.getcountries');
+});
+
+// In routes/web.php
+Route::get('/states/by-country/{country}', function ($countryId) {
+    return \App\Models\State::where('country_id', $countryId)->get();
+});
+Route::get('/cities/by-state/{state}', function ($stateId) {
+    return \App\Models\City::where('state_id', $stateId)->get();
 });
 
 Route::middleware(['auth', 'verified'])->group(function () {
@@ -201,9 +443,15 @@ Route::middleware(['auth', 'verified'])->group(function () {
             'zip' => 'nullable|string|max:20',
             'website' => 'nullable|string|max:255',
             'contacts' => 'array',
-            'contacts.*.name' => 'required_with:contacts|string|max:255',
+            'contacts.*.salutation' => 'nullable|string|max:50',
+            'contacts.*.first_name' => 'required_with:contacts|string|max:255',
+            'contacts.*.last_name' => 'required_with:contacts|string|max:255',
             'contacts.*.email' => 'nullable|email|max:255',
             'contacts.*.phone' => 'nullable|string|max:30',
+            'contacts.*.mobile' => 'nullable|string|max:30',
+            'contacts.*.address1' => 'nullable|string|max:255',
+            'contacts.*.position' => 'nullable|string|max:100',
+            'contacts.*.department' => 'nullable|string|max:100',                
         ]);
 
         // Create the client
@@ -229,13 +477,14 @@ Route::middleware(['auth', 'verified'])->group(function () {
             'client_reference' => 'nullable|string|max:255',
             'description' => 'nullable|string|max:255',
             'lead_type_id' => 'required|integer|exists:lead_types,id',
-            'contact_id' => 'nullable|integer|exists:clients,contacts,id',
+            'contact_id' => 'nullable|integer|exists:contacts,id',
             'status' => 'nullable|string|max:50',
             'expected_close_date' => 'nullable|date',
             'actual_close_date' => 'nullable|date',
+            'created_by' => 'nullable|integer|exists:users,id',
             'lastupdated_by' => 'nullable|integer|exists:users,id',
             'assigned_to' => 'nullable|integer|exists:users,id',
-            'conversion' => 'nullable|enum:Bid,DNB,Lost,Won,YTS',
+            'conversion' => 'nullable|string|max:20,',
             'conversion_notes' => 'nullable|string|max:255',
             'source' => 'nullable|string|max:50'
         ]);
@@ -245,16 +494,20 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
         // For every Task and its Steps, insert a Workflow record for each Step for this Lead
         $tasks = Task::with('steps')->get();
+        $firstStepCreated = false;
         foreach ($tasks as $task) {
             foreach ($task->steps as $step) {
-                Workflow::create([  
+                Workflow::create([
                     'lead_id' => $lead->id,
                     'task_id' => $task->id,
                     'step_id' => $step->id,
-                    'status' => 'pending',
-                    'assigned_to' => $validated['assigned_to'] ?? 1, // Use the assigned user if provided
-                    // Add other Workflow fields as needed (e.g., status, assigned_to, etc.)
+                    'status' => !$firstStepCreated ? 'completed' : 'pending', // Mark the very first as completed
+                    'lastupdated_by' => $validated['lastupdated_by'] ?? auth()->id(),
+                    'assigned_to' => $validated['assigned_to'] ?? 1,
                 ]);
+                if (!$firstStepCreated) {
+                    $firstStepCreated = true;
+                }
             }
         }
 

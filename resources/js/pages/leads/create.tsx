@@ -23,6 +23,7 @@ export default function CreateLead({ clients = [], leadTypes = [], users = [], l
         lead_status: '',
         expected_close_date: '',
         actual_close_date: '',
+        created_by: auth?.user?.id || '',
         lastupdated_by: auth?.user?.id || '',
         assigned_to: '',
         conversion: 'YTS',
@@ -148,10 +149,11 @@ export default function CreateLead({ clients = [], leadTypes = [], users = [], l
                                     >
                                         <option value="">Select Contact</option>
                                         {filteredContacts.map((contact: any) => (
-                                            <option key={contact.id} value={contact.id}>
-                                                {contact.first_name} {contact.last_name} {contact.email ? `(${contact.email})` : ''}
-                                            </option>
-                                        ))}
+                                        <option key={contact.id} value={contact.id}>
+                                            {(contact.first_name || '') + ' ' + (contact.last_name || '')}
+                                            {contact.email ? ` (${contact.email})` : ''}
+                                        </option>
+                                    ))}
                                     </select>
                                     {errors.contact_id && <p className="text-xs text-red-500 italic">{errors.contact_id}</p>}
                                 </div>

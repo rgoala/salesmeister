@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use \App\Models\Contact;
 
 class Client extends Model
 {
@@ -11,16 +12,21 @@ class Client extends Model
         'email',
         'phone',
         'fax',
-        'address',
-        'city',
-        'state',
-        'country',
+        'address1',
+        'address2',
+        'city_id',
+        'state_id',
+        'country_id',
         'zip',
         'website',
+        'industry',
+        'status',
+        'tax_id',
+        'currency',
     ];
 
     public function contacts() {
-        return $this->hasMany(\App\Models\Contact::class);
+        return $this->hasMany(Contact::class);
     }
 
     public function city()

@@ -25,10 +25,8 @@ return new class extends Migration
             $table->string('country');
             $table->string('website')->nullable();
             $table->string('industry')->nullable();
-            $table->string('type')->nullable();
             $table->string('status')->default('active');
             $table->string('tax_id')->nullable();
-            $table->string('vat_number')->nullable();
             $table->enum('currency',['AED','EUR','GBP','INR','PKR','USD','JPY'])->default('AED');
             $table->timestamps();
         });
