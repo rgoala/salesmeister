@@ -16,7 +16,7 @@ type WorkflowStep = {
     task_title: string;
     step_description: string;
     status?: string;
-    assigned_to?: number;
+    assigned_to?: string;
 };
 
 type Lead = {

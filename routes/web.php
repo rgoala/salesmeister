@@ -12,6 +12,8 @@ use \App\Models\LeadType;
 use \App\Models\Lead;
 use \App\Models\Workflow;
 use \App\Models\Step;
+use App\Models\WorkflowAttachment;
+use Illuminate\Support\Facades\Storage;
 
 Route::get('/', function () {
     return Inertia::render('welcome');
@@ -145,13 +147,19 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('/workflows/{workflow}/edit', function (Workflow $workflow) {
         $lead = Lead::find($workflow->lead_id);
         $users = User::select('id', 'name')->get();
+        
+         // Get assigned_to user name if available
+        $assignedToUser = $workflow->assigned_to
+            ? User::find($workflow->assigned_to)
+            : null;
+        
         return Inertia::render('workflows/edit', [
             'workflow' => [
                 'id' => $workflow->id,
                 'task_title' => $workflow->task ? $workflow->task->title : '',
                 'step_description' => $workflow->step ? $workflow->step->description : '',
                 'status' => $workflow->status,
-                'assigned_to' => $workflow->assigned_to,
+                'assigned_to' => $assignedToUser ? $assignedToUser->name : null,
                 'data' => $workflow->data ?? '',
             ],
             'lead' => [
@@ -529,6 +537,37 @@ Route::middleware(['auth', 'verified'])->group(function () {
             'contacts' => $contacts
         ]);
     })->name('leads.create');
+});
+
+Route::middleware(['auth', 'verified'])->group(function () {
+    Route::post('/workflows/{workflow}/update', function (Request $request, Workflow $workflow) {
+        $validated = $request->validate([
+            'status' => 'required|string|max:50',
+            'assigned_to' => 'nullable|exists:users,id',
+            'data' => 'required|string',
+            'attachments.*' => 'file|mimes:pdf,xlsx,docx,jpg,jpeg,png|max:2048', // 2MB max per file
+        ]);
+
+        // Update workflow step
+        $workflow->status = $validated['status'];
+        $workflow->assigned_to = $validated['assigned_to'] ?? $workflow->assigned_to;
+        $workflow->data = $validated['data'];
+        $workflow->save();
+
+        // Handle file uploads
+        if ($request->hasFile('attachments')) {
+            foreach ($request->file('attachments') as $file) {
+                $path = $file->store('workflow_attachments');
+                WorkflowAttachment::create([
+                    'workflow_id' => $workflow->id,
+                    'filename' => $file->getClientOriginalName(),
+                    'file_path' => $path,
+                ]);
+            }
+        }
+
+        return redirect()->route('leads.index')->with('success', 'Workflow step updated successfully!');
+    })->name('workflows.update');
 });
 
 require __DIR__.'/settings.php';
