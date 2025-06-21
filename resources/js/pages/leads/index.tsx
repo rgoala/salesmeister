@@ -3,6 +3,7 @@ import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router } from '@inertiajs/react';
 import axios from 'axios';
 import React, { useState } from 'react';
+import { FaRegCommentDots } from 'react-icons/fa';
 
 const breadcrumbs: BreadcrumbItem[] = [
     {
@@ -98,7 +99,7 @@ export default function Leads({ leads = [] }: { leads?: Lead[] }) {
 
     // Handler for Proceed button
     const handleProceed = (wf: WorkflowStep, lead: Lead) => {
-    router.get(`/workflows/${wf.id}/edit`);
+        router.get(`/workflows/${wf.id}/edit`);
     };
 
     // Group workflows by task title
@@ -198,10 +199,16 @@ export default function Leads({ leads = [] }: { leads?: Lead[] }) {
                                                                                                     Status
                                                                                                 </th>
                                                                                                 <th className="border px-2 py-1 text-left text-xs">
+                                                                                                    Last Modified
+                                                                                                </th>
+                                                                                                <th className="border px-2 py-1 text-left text-xs">
+                                                                                                    Attachments
+                                                                                                </th>
+                                                                                                <th className="border px-2 py-1 text-left text-xs">
                                                                                                     Assigned To
                                                                                                 </th>
                                                                                                 <th className="border px-2 py-1 text-left text-xs">
-                                                                                                    Actions
+                                                                                                    Actions/Comments
                                                                                                 </th>
                                                                                             </tr>
                                                                                         </thead>
@@ -230,6 +237,37 @@ export default function Leads({ leads = [] }: { leads?: Lead[] }) {
                                                                                                         </td>
                                                                                                         <td className="border px-2 py-1">
                                                                                                             {wf.status || '-'}
+                                                                                                            {/* Show last modified date for completed steps */}
+                                                                                                        </td>
+                                                                                                        <td className="border px-2 py-1">
+                                                                                                            {isCompleted && wf.updated_at && (
+                                                                                                                <div className="text-xs text-gray-500">
+                                                                                                                    {new Date(
+                                                                                                                        wf.updated_at,
+                                                                                                                    ).toLocaleString()}
+                                                                                                                </div>
+                                                                                                            )}
+                                                                                                        </td>
+                                                                                                        <td className="border px-2 py-1">
+                                                                                                            {/* Show document links if any */}
+                                                                                                            {wf.attachments &&
+                                                                                                                wf.attachments.length > 0 && (
+                                                                                                                    <div className="mb-1">
+                                                                                                                        {wf.attachments.map(
+                                                                                                                            (att: any) => (
+                                                                                                                                <a
+                                                                                                                                    key={att.id}
+                                                                                                                                    href={att.url}
+                                                                                                                                    target="_blank"
+                                                                                                                                    rel="noopener noreferrer"
+                                                                                                                                    className="block text-xs text-blue-600 underline"
+                                                                                                                                >
+                                                                                                                                    {att.filename}
+                                                                                                                                </a>
+                                                                                                                            ),
+                                                                                                                        )}
+                                                                                                                    </div>
+                                                                                                                )}
                                                                                                         </td>
                                                                                                         <td className="border px-2 py-1">
                                                                                                             {wf.assigned_to ? (
@@ -269,6 +307,36 @@ export default function Leads({ leads = [] }: { leads?: Lead[] }) {
                                                                                                                     </button>
                                                                                                                 </>
                                                                                                             )}
+                                                                                                            {/* Comments icon with tooltip */}
+                                                                                                            {wf.comments &&
+                                                                                                                wf.comments.length > 0 && (
+                                                                                                                    <span className="group relative ml-2">
+                                                                                                                        <FaRegCommentDots className="cursor-pointer text-blue-500" />
+                                                                                                                        <div className="absolute left-1/2 z-10 hidden w-64 -translate-x-1/2 rounded bg-gray-800 p-2 text-xs text-white group-hover:block">
+                                                                                                                            {wf.comments.map(
+                                                                                                                                (
+                                                                                                                                    comment: any,
+                                                                                                                                    idx: number,
+                                                                                                                                ) => (
+                                                                                                                                    <div
+                                                                                                                                        key={idx}
+                                                                                                                                        className="mb-1 last:mb-0"
+                                                                                                                                    >
+                                                                                                                                        <span className="font-semibold">
+                                                                                                                                            {
+                                                                                                                                                comment.user_name
+                                                                                                                                            }
+                                                                                                                                            :
+                                                                                                                                        </span>{' '}
+                                                                                                                                        {
+                                                                                                                                            comment.comment
+                                                                                                                                        }
+                                                                                                                                    </div>
+                                                                                                                                ),
+                                                                                                                            )}
+                                                                                                                        </div>
+                                                                                                                    </span>
+                                                                                                                )}
                                                                                                         </td>
                                                                                                     </tr>
                                                                                                 );

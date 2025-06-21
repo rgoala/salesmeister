@@ -22,7 +22,7 @@ return new class extends Migration
             $table->decimal('unitprice', 12, 2)->default(0);
             $table->decimal('totalprice', 12, 2)->default(0);
             $table->string('currency', 3)->default('USD');
-            $table->string('status', ['Pending','Constrained','Sourced'])->default('Pending');
+            $table->enum('status', ['Pending','Constrained','Sourced'])->default('Pending');
             $table->timestamps();
         });
     }

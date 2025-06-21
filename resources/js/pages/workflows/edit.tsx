@@ -67,7 +67,7 @@ export default function WorkflowEdit({ workflow, lead, users }: PageProps) {
     formData.append('status', status);
     formData.append('assigned_to', assignedTo as any);
     formData.append('data', data);
-    files.forEach((file, idx) => {
+    files.forEach((file) => {
         formData.append('attachments[]', file);
     });
 

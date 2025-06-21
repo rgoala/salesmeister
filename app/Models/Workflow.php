@@ -22,9 +22,12 @@ class Workflow extends Model
     
     public function lead()
     {
-        return $this->belongsTo(\App\Models\Lead::class, 'lead_id');
+        return $this->belongsTo(Lead::class);
     }
 
+
+    public function assignedToUser() { return $this->belongsTo(User::class, 'assigned_to'); }
+    public function assignedByUser() { return $this->belongsTo(User::class, 'assigned_by'); }
     public function task() { return $this->belongsTo(\App\Models\Task::class); }
     public function step() { return $this->belongsTo(\App\Models\Step::class); }
 }

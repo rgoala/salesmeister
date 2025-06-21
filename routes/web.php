@@ -14,6 +14,8 @@ use \App\Models\Workflow;
 use \App\Models\Step;
 use App\Models\WorkflowAttachment;
 use Illuminate\Support\Facades\Storage;
+use App\Models\Comment;
+use Illuminate\Support\Facades\Auth;
 
 Route::get('/', function () {
     return Inertia::render('welcome');
@@ -21,11 +23,11 @@ Route::get('/', function () {
 
 // Dashboard
 
-Route::middleware(['auth', 'verified'])->group(function () {
-    Route::get('dashboard', function () {
-        return Inertia::render('dashboard');
-    })->name('dashboard');
-});
+// Route::middleware(['auth', 'verified'])->group(function () {
+//     Route::get('dashboard', function () {
+//         return Inertia::render('dashboard');
+//     })->name('dashboard');
+// });
 
 // Leads
 
@@ -58,11 +60,44 @@ Route::middleware(['auth', 'verified'])->group(function () {
                     'assigned_to' => $lead->assignedToUser ? $lead->assignedToUser->name : null,
                     'lead_type' => $lead->leadType ? ['title' => $lead->leadType->name] : null,
                     'workflows' => $lead->workflows->map(function ($wf) {
-                        return [
+                        // Get attachments for this workflow step
+                        $attachments = \App\Models\WorkflowAttachment::where('workflow_id', $wf->id)
+                            ->get()
+                            ->map(function ($att) {
+                                return [
+                                    'id' => $att->id,
+                                    'filename' => $att->filename,
+                                    'url' => \Illuminate\Support\Facades\Storage::url($att->file_path),
+                                ];
+                            });
+
+                        // Fetch assigned_to user name
+                        $assignedToUser = $wf->assigned_to
+                            ? \App\Models\User::find($wf->assigned_to)
+                            : null;
+                        
+                        // Fetch comments for this workflow step, with user name
+                        $comments = \App\Models\Comment::where('workflow_id', $wf->id)
+                            ->orderBy('created_at', 'desc')
+                            ->get()
+                            ->map(function ($comment) {
+                                return [
+                                    'id' => $comment->id,
+                                    'comment' => $comment->comment,
+                                    'user_name' => $comment->user ? $comment->user->name : null,
+                                    'created_at' => $comment->created_at ? $comment->created_at->toDateTimeString() : null,
+                                ];
+                            });
+
+                         return [
                             'id' => $wf->id,
                             'task_title' => $wf->task ? $wf->task->title : '',
                             'step_description' => $wf->step ? $wf->step->description : '',
                             'status' => $wf->status,
+                            'updated_at' => $wf->updated_at ? $wf->updated_at->toDateTimeString() : null,
+                            'attachments' => $attachments,
+                            'assigned_to' => $assignedToUser ? $assignedToUser->name : null, // Show user name
+                            'comments' => $comments,
                         ];
                     }),
                 ];
@@ -82,7 +117,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
             ->pluck('count', 'status');
 
         // Ensure all statuses are present (Open, In-progress, Closed)
-        $allStatuses = ['New', 'in-progress', 'Closed'];
+        $allStatuses = ['New', 'In-progress', 'Closed'];
         $result = [];
         foreach ($allStatuses as $status) {
             $result[$status] = $statusCounts[$status] ?? 0;
@@ -232,26 +267,11 @@ Route::middleware(['auth', 'verified'])->group(function () {
     });
 });
 
-// Route::middleware(['auth', 'verified'])->group(function () {
-//     Route::get('leads/by-task-category', function () {
-//         // Join leads, workflows, tasks and group by task title (category)
-//         $taskCounts = \App\Models\Workflow::selectRaw('tasks.title as task_category, COUNT(DISTINCT lead_id) as leads_count')
-//             ->join('tasks', 'workflows.task_id', '=', 'tasks.id')
-//             ->groupBy('tasks.title')
-//             ->pluck('leads_count', 'task_category');
 
-//         return response()->json($taskCounts);
-//     });
-// });
-
-
-
-// Route::middleware(['auth', 'verified'])->group(function () {
-//     Route::get('clients', function () {
-//         return Inertia::render('admin/clients/index',['clients' => Client::all()]);
-//     })->name('clients.index');
-// });
-
+// Clients
+// This route will render the clients index page with all clients and their contacts.
+// It will eager load contacts and leads count to optimize performance.
+// It also ensures that the user is authenticated and verified before accessing this route.
 Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('clients', function () {
         $clients = Client::with(['contacts:id,client_id,first_name,last_name'])
@@ -436,6 +456,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
         });
 });
 
+// Store Client
+// This route handles the creation of a new client.
+// It validates the request data, creates the client, and adds contacts if provided.
+// It also ensures that the user is authenticated and verified before accessing this route.
 Route::middleware(['auth', 'verified'])->group(function () {
     Route::post('clients/store', function (Request $request) {
         $validated = $request->validate([
@@ -477,6 +501,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
 });
 
 
+// Store Lead
+// This route handles the creation of a new lead.
+// It validates the request data, creates the lead, and initializes the workflow steps.
+// It also ensures that the user is authenticated and verified before accessing this route.
 Route::middleware(['auth', 'verified'])->group(function () {
     Route::post('leads/store', function (Request $request) {
         $validated = $request->validate([
@@ -523,6 +551,11 @@ Route::middleware(['auth', 'verified'])->group(function () {
     })->name('leads.store');
 });
 
+
+// Create Lead Form
+// This route will render the form for creating a new lead
+// It will fetch necessary data like clients, lead types, users, and contacts
+// and pass them to the Inertia view for rendering.
 Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('leads/create', function () {
         // Fetch clients and lead types for the form
@@ -539,20 +572,32 @@ Route::middleware(['auth', 'verified'])->group(function () {
     })->name('leads.create');
 });
 
+// Update Workflow Step
+// This route handles the update of a workflow step, including saving comments and attachments.
+// It validates the request data, updates the workflow status, saves comments,
+// and handles file uploads for attachments.
+// It also ensures that the user is authenticated and verified before accessing this route.
 Route::middleware(['auth', 'verified'])->group(function () {
     Route::post('/workflows/{workflow}/update', function (Request $request, Workflow $workflow) {
         $validated = $request->validate([
             'status' => 'required|string|max:50',
             'assigned_to' => 'nullable|exists:users,id',
             'data' => 'required|string',
-            'attachments.*' => 'file|mimes:pdf,xlsx,docx,jpg,jpeg,png|max:2048', // 2MB max per file
+            'attachments.*' => 'file|mimes:pdf,xlsx,docx,jpg,jpeg,png|max:10240',
         ]);
 
-        // Update workflow step
+        // Update workflow step (do NOT save 'data' here)
         $workflow->status = $validated['status'];
         $workflow->assigned_to = $validated['assigned_to'] ?? $workflow->assigned_to;
-        $workflow->data = $validated['data'];
         $workflow->save();
+
+        // Save comment to comments table
+        Comment::create([
+            'lead_id' => $workflow->lead_id, 
+            'workflow_id' => $workflow->id,
+            'user_id' => Auth::id(),
+            'comment' => $validated['data'],
+        ]);
 
         // Handle file uploads
         if ($request->hasFile('attachments')) {
@@ -568,6 +613,37 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
         return redirect()->route('leads.index')->with('success', 'Workflow step updated successfully!');
     })->name('workflows.update');
+});
+
+// My Tasks
+// This route will render the my-tasks page for the authenticated user.
+Route::middleware(['auth', 'verified'])->group(function () {
+Route::get('dashboard', function () {
+    $user = auth()->user();
+    $steps = Workflow::with(['lead', 'assignedByUser'])
+        ->where('assigned_to', $user->id)
+        ->where('status', 'pending') // Only fetch pending items
+        ->where(function ($query) {
+                $query->whereHas('step', function ($q) {
+                    // Only steps that are the first in their task
+                    $q->whereDoesntHave('previousStep');
+                })
+                ->orWhereHas('step.previousStep', function ($q) {
+                    // Or steps where the previous step is completed or skipped
+                    $q->whereHas('workflows', function ($wq) {
+                        $wq->whereIn('status', ['completed', 'skipped']);
+                    });
+                });
+            })
+        ->orderBy('updated_at', 'desc')
+        ->paginate(5);
+
+    return Inertia::render('dashboard', [
+        'steps' => $steps->items(),
+        'currentPage' => $steps->currentPage(),
+        'lastPage' => $steps->lastPage(),
+    ]);
+    })->name('dashboard');
 });
 
 require __DIR__.'/settings.php';
