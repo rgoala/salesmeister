@@ -9,6 +9,7 @@ class Comment extends Model
     protected $fillable = [
         'lead_id',
         'user_id',
+        'workflow_id',
         'comment',
         'created_at',
         'updated_at',
